@@ -49,6 +49,7 @@ jobs:
       - name: Verify OpenSSL exposes RC4
         run: |
           mix local.hex --force
+          mix deps.get
           mix run -e '
             probe = fn ->
               try do
