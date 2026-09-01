@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.16.3"
+          otp-version: "26.2.5.17"
+          version-type: strict
+      - run: |
+          mix local.hex --force
+          mix deps.get
+          mix lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.16.3"
+          otp-version: "26.2.5.17"
+          version-type: strict
+      - run: |
+          mix local.hex --force
+          mix deps.get
+          mix test --exclude requires_openssl_rc4
+
+  parity:
+    name: OpenSSL RC4 parity
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.16.3"
+          otp-version: "25.3.2.15"
+          version-type: strict
+      - name: Verify OpenSSL exposes RC4
+        run: |
+          mix local.hex --force
+          mix run -e '
+            probe = fn ->
+              try do
+                :crypto.crypto_one_time(:rc4, <<1>>, <<2>>, false)
+                true
+              catch
+                _, _ -> false
+              end
+            end
+
+            supported = :rc4 in (:crypto.supports()[:ciphers] || []) and probe.()
+
+            unless supported do
+              IO.puts(:stderr, "Expected :crypto to expose working RC4 on OTP 25.3 / ubuntu-22.04")
+              System.halt(1)
+            end
+          '
+      - run: |
+          mix deps.get
+          mix test --only requires_openssl_rc4
